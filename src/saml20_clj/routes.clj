@@ -197,10 +197,12 @@
                  (prn "sign:" valid-signature?)
                  (prn "relay:" valid-relay-state?)
                  (prn "sess:" session)
-                 (prn "name-id:" (-> saml-info :assertions first :name-id))
+                 ;; (prn "params:" params)
+                 (prn "cont-url" continue-url)
+                 (prn "name-id:" (-> saml-info :assertions first :name-id :value))
                  (if valid?
                    {:status  303 ;; See other
-                    :headers {"Location" continue-url}
+                    :headers {"Location" (str base-uri continue-url)}
                     :session (assoc session :saml (saml-info :name-id))
                     :body ""}
                    {:status 500
