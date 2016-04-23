@@ -68,11 +68,11 @@
        :body "The SAML response from the IdP did not validate!"})))
 
 (defn saml-wrapper
-  [handler
-   {:keys [base-uri app-name idp-uri idp-cert keystore-file
-           keystore-password key-alias acs-uri] :as saml20-config}
+  [handler {:keys [base-uri app-name idp-uri idp-cert keystore-file
+                   keystore-password key-alias acs-path] :as saml20-config}
    mutables]
-  (let [new-mutables (assoc
+  (let [acs-uri (str base-uri "/" acs-path)
+        new-mutables (assoc
                        mutables
                        :xml-signer
                        (saml-sp/make-saml-signer
@@ -95,13 +95,12 @@
                  :prune-fn! (partial saml-sp/prune-timed-out-ids!
                                      (:saml-id-timeouts mutables))))))))
 
-(defn helmsman-routes
-  [saml20-config]
+(defn helmsman-routes [saml20-config]
   [[saml-wrapper saml20-config (saml-sp/generate-mutables)]
    [:get "saml/meta" meta-response]
-   ^{:id :saml20-clj/endpoint}
+   ^{:id :saml20-clj/endjoint}
    [:get "saml" new-request-handler]
-   [:post (saml20-config :acs-uri) process-response-handler]])
+   [:post (saml20-config :acs-path) process-response-handler]])
 
 
 
@@ -156,12 +155,13 @@
   the browser to the 'continue-url' that is found in the RelayState paramete, or the '/' root
   of the app.
   "
-  [{:keys [acs-uri app-name base-uri idp-uri idp-cert keystore-file keystore-password key-alias]}]
+  [{:keys [acs-path app-name base-uri idp-uri idp-cert keystore-file keystore-password key-alias]}]
   (let [decrypter (saml-sp/make-saml-decrypter keystore-file keystore-password key-alias)
         cert (saml-shared/get-certificate-b64  keystore-file keystore-password key-alias)
         mutables (assoc (saml-sp/generate-mutables)
                         :xml-signer (saml-sp/make-saml-signer keystore-file keystore-password key-alias))
 
+        acs-uri (str base-uri "/" acs-path)
         saml-req-factory! (saml-sp/create-request-factory mutables
                                                           idp-uri
                                                           saml-format
@@ -183,7 +183,7 @@
                 (saml-sp/get-idp-redirect idp-uri
                                           (saml-req-factory!)
                                           relay-state)))
-      (cc/POST "/saml" {params :params session :session}
+      (cc/POST (str "/" acs-path) {params :params session :session}
                (let [xml-response (saml-shared/base64->inflate->str (:SAMLResponse params))
                      relay-state (:RelayState params)
                      [valid-relay-state? continue-url] (valid-hmac-relay-state? (:secret-key-spec mutables) relay-state)
@@ -193,11 +193,15 @@
                                         true)
                      valid? (and valid-relay-state? valid-signature?)
                      saml-info (when valid? (saml-sp/saml-resp->assertions saml-resp decrypter) )]
-                 ;;(prn saml-info)
+                 (prn saml-info)
+                 (prn "sign:" valid-signature?)
+                 (prn "relay:" valid-relay-state?)
+                 (prn "sess:" session)
+                 (prn "name-id:" (-> saml-info :assertions first :name-id))
                  (if valid?
                    {:status  303 ;; See other
                     :headers {"Location" continue-url}
-                    :session (assoc session :saml saml-info)
+                    :session (assoc session :saml (saml-info :name-id))
                     :body ""}
                    {:status 500
                     :body "The SAML response from IdP does not validate!"}))))))
