@@ -26,102 +26,6 @@
         valid? (= hmac (saml-shared/hmac-str secret-key-spec relay-state))]
     [valid? relay-state]))
 
-(defn meta-response
-  [req]
-  (let [{:keys [app-name acs-uri cert]} (:saml20 req)]
-    {:status 200
-     :headers {"Content-type" "text/xml"}
-     :body (saml-sp/metadata app-name acs-uri cert)}))
-
-(defn new-request-handler
-  [req]
-  (let [continue-url (get-in req [:params :continue] "/")
-        relay-state (create-hmac-relay-state
-                      (get-in req [:saml20 :mutables :secret-key-spec])
-                      continue-url)]
-    (saml-sp/get-idp-redirect
-      (get-in req [:saml20 :idp-uri])
-      ((get-in req [:saml20 :saml20-req-factory!]))
-      relay-state)))
-
-(defn process-response-handler
-  [{:keys [saml20 params session] :as req}]
-  (let [xml-response (saml-shared/base64->inflate->str (:SAMLResponse params))
-        [valid-relay-state? continue-url]
-        (valid-hmac-relay-state?
-          (get-in saml20 [:mutables :secret-key-spec])
-          (:RelayState params))
-        saml-resp (saml-sp/xml-string->saml-resp xml-response)
-        valid-signature?
-        (if (:idp-cert saml20)
-          (saml-sp/validate-saml-response-signature
-            saml-resp (:idp-cert saml20)) true)
-        valid? (and valid-relay-state? valid-signature?)
-        saml-info (when valid? (saml-sp/saml-resp->assertions
-                                 saml-resp (:decrypter saml20)))]
-    (if valid?
-      {:status 303
-       :headers {"Location" continue-url}
-       :session (assoc session :saml20 saml-info)
-       :body ""}
-      {:status 500
-       :body "The SAML response from the IdP did not validate!"})))
-
-(defn saml-wrapper
-  [handler {:keys [base-uri app-name idp-uri idp-cert keystore-file
-                   keystore-password key-alias acs-path] :as saml20-config}
-   mutables]
-  (let [acs-uri (str base-uri "/" acs-path)
-        new-mutables (assoc
-                       mutables
-                       :xml-signer
-                       (saml-sp/make-saml-signer
-                         keystore-file keystore-password key-alias))]
-    (fn saml-wrapper-fn
-      [request]
-      (handler
-        (assoc
-          request :saml20
-          (assoc saml20-config
-                 :decrypter (saml-sp/make-saml-decrypter
-                              keystore-file keystore-password key-alias)
-                 :cert (saml-shared/get-certificate-b64
-                         keystore-file keystore-password key-alias)
-                 :mutables new-mutables
-                 :acs-uri acs-uri
-                 :saml20-req-factory! (saml-sp/create-request-factory
-                                        new-mutables idp-uri saml-format
-                                        app-name acs-uri)
-                 :prune-fn! (partial saml-sp/prune-timed-out-ids!
-                                     (:saml-id-timeouts mutables))))))))
-
-(defn helmsman-routes [saml20-config]
-  [[saml-wrapper saml20-config (saml-sp/generate-mutables)]
-   [:get "saml/meta" meta-response]
-   ^{:id :saml20-clj/endjoint}
-   [:get "saml" new-request-handler]
-   [:post (saml20-config :acs-path) process-response-handler]])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 (defn saml-routes
   "The SP routes. They can be combined with application specific routes. Also it is assumed that
   they are wrapped with compojure.handler/site or wrap-params and wrap-session.
@@ -193,17 +97,17 @@
                                         true)
                      valid? (and valid-relay-state? valid-signature?)
                      saml-info (when valid? (saml-sp/saml-resp->assertions saml-resp decrypter) )]
-                 (prn saml-info)
-                 (prn "sign:" valid-signature?)
-                 (prn "relay:" valid-relay-state?)
-                 (prn "sess:" session)
+                 ;; (prn saml-info)
+                 ;; (prn "sign:" valid-signature?)
+                 ;; (prn "relay:" valid-relay-state?)
+                 ;; (prn "sess:" session)
                  ;; (prn "params:" params)
-                 (prn "cont-url" continue-url)
-                 (prn "name-id:" (-> saml-info :assertions first :name-id :value))
+                 ;; (prn "cont-url" continue-url)
+                 ;; (prn "name-id:" (-> saml-info :assertions first :name-id :value))
                  (if valid?
                    {:status  303 ;; See other
-                    :headers {"Location" (str base-uri continue-url)}
-                    :session (assoc session :saml (saml-info :name-id))
+                    :headers {"Location" (str base-uri "/" continue-url)}
+                    :session (assoc session :saml (-> saml-info :assertions first :name-id :value))
                     :body ""}
                    {:status 500
                     :body "The SAML response from IdP does not validate!"}))))))
