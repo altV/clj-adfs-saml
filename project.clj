@@ -1,6 +1,6 @@
-(defproject saml20-clj "0.1.6"
-  :description "Basic SAML 2.0 library for SSO."
-  :url "https://github.com/vlacs/saml20-clj"
+(defproject clj-saml-adfs "1.0.0"
+  :description "Simplest SAML 2.0 auth that works with ADFS"
+  :url "https://github.com/altV/clj-adfs-saml"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src"]
