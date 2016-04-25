@@ -1,4 +1,4 @@
-(defproject clj-saml-adfs "1.0.0"
+(defproject clj-saml-adfs "1.0.1"
   :description "Simplest SAML 2.0 auth that works with ADFS"
   :url "https://github.com/altV/clj-adfs-saml"
   :license {:name "Eclipse Public License"
@@ -15,6 +15,11 @@
                  [org.clojure/data.codec "0.1.0"]
                  [org.clojure/data.zip "0.1.1"]
                  [org.vlacs/helmsman "1.0.0-alpha5"]]
+
+  :repositories [["releases" {:url "https://clojars.org/repo"
+                              :username :env
+                              :sign-releases false
+                              :password :env}]]
   :pedantic :warn
   :profiles {:dev {:source-paths ["dev" "test"]
                    :dependencies [[org.clojure/tools.namespace "0.2.10"]

@@ -106,7 +106,7 @@
                  ;; (prn "name-id:" (-> saml-info :assertions first :name-id :value))
                  (if valid?
                    {:status  303 ;; See other
-                    :headers {"Location" (str base-uri "/" continue-url)}
+                    :headers {"Location" continue-url}
                     :session (assoc session :saml (-> saml-info :assertions first :name-id :value))
                     :body ""}
                    {:status 500
